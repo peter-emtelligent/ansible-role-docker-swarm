@@ -1,0 +1,6 @@
+---
+# file: roles/docker-swarm/tasks/main.yml
+
+- include_tasks: config.yml
+  tags:
+    - docker-swarm:config

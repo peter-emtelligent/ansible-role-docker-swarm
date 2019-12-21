@@ -1,0 +1,7 @@
+---
+# file: roles/docker-swarm/tasks/config.yml
+
+- name: docker-swarm | init a new swarm with default params
+  docker_swarm:
+    state: present
+  when: docker_swarm_mode == 'manager'
