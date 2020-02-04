@@ -1,6 +1,52 @@
 ---
 # file: roles/docker-swarm/tasks/main.yml
 
-- include_tasks: config.yml
-  tags:
-    - docker-swarm:config
+- name: get docker host info
+  docker_host_info:
+  register: docker_info
+
+- name: init first swarm manager
+  docker_swarm:
+    state: present
+  when: "docker_info.host_info.Swarm.LocalNodeState == 'inactive'
+    and inventory_hostname == groups['docker_swarm_manager'][0]"
+
+- name: get the worker and manager join tokens
+  docker_swarm_info:
+  changed_when: false
+  register: swarm_info
+  delegate_to: "{{ groups['docker_swarm_manager'][0] }}"
+  delegate_facts: true
+  when: "'docker_swarm_worker' in group_names"
+
+- name: distribute swarm manager address (manager)
+  set_fact:
+    docker_manager_address: "{{ ansible_default_ipv4.address }}"
+  when: "inventory_hostname == groups['docker_swarm_manager'][0]"
+
+- name: distribute swarm manager address (worker)
+  set_fact:
+    docker_manager_address: "{{ hostvars[groups['docker_swarm_manager'][0]]['ansible_default_ipv4']['address'] }}"
+  when: "inventory_hostname != groups['docker_swarm_manager'][0]"
+
+- name: join pending worker nodes
+  docker_swarm:
+    state: join
+    advertise_addr: "{{ ansible_default_ipv4.address }}"
+    join_token: "{{ swarm_info.swarm_facts.JoinTokens.Worker }}"
+    remote_addrs: [ "{{ docker_manager_address }}" ]
+  changed_when: false
+  when: "docker_info.host_info.Swarm.LocalNodeState == 'inactive'
+    and 'docker_swarm_worker' in group_names
+    and 'docker_swarm_manager' not in group_names"
+
+- name: join pending manager nodes
+  docker_swarm:
+    state: join
+    advertise_addr: "{{ ansible_default_ipv4.address }}"
+    join_token: "{{ swarm_info.swarm_facts.JoinTokens.Manager }}"
+    remote_addrs: [ "{{ docker_manager_address }}" ]
+  changed_when: false
+  when: "docker_info.host_info.Swarm.LocalNodeState == 'inactive'
+    and 'docker_swarm_manager' in group_names
+    and inventory_hostname != groups['docker_swarm_manager'][0]"

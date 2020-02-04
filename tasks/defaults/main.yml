@@ -1,4 +1,0 @@
----
-# file: roles/docker-swarm/defaults/main.yml
-
-docker_swarm_mode: worker
